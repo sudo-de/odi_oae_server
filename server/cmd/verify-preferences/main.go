@@ -18,7 +18,7 @@ func main() {
 	ctx, cancel := database.DefaultTimeout()
 	defer cancel()
 
-	fmt.Println("🔍 Verifying User Preferences Database Structure...\n")
+	fmt.Println("🔍 Verifying User Preferences Database Structure...")
 
 	// 1. Check if user_preferences table exists
 	fmt.Println("1️⃣ Checking user_preferences table structure...")
@@ -170,7 +170,7 @@ func main() {
 
 	// 7. Test database functions
 	fmt.Println("\n7️⃣ Testing database functions...")
-	
+
 	// Test GetUserPreferences (will create default if doesn't exist)
 	testUserID := 1
 	prefs, err := database.GetUserPreferences(ctx, testUserID)
@@ -186,7 +186,7 @@ func main() {
 		fmt.Printf("   ❌ UpdateUserPreferences failed: %v\n", err)
 	} else {
 		fmt.Println("   ✅ UpdateUserPreferences works")
-		
+
 		// Verify update
 		updatedPrefs, err := database.GetUserPreferences(ctx, testUserID)
 		if err != nil {
@@ -201,7 +201,7 @@ func main() {
 	}
 
 	// Reset to default for testing
-	database.UpdateUserPreferences(ctx, testUserID, "blue", "system")
+	_ = database.UpdateUserPreferences(ctx, testUserID, "blue", "system")
 
 	fmt.Println("\n✅ Database verification complete!")
 }

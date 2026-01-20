@@ -1,5 +1,9 @@
 # Build stage
-FROM golang:1.23-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS builder
+
+# Build arguments for cross-compilation
+ARG TARGETOS
+ARG TARGETARCH
 
 # Install git and ca-certificates (needed for fetching dependencies)
 RUN apk add --no-cache git ca-certificates tzdata
@@ -16,9 +20,8 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the application (TARGETARCH is set by Docker buildx)
-ARG TARGETARCH
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -ldflags="-w -s" -o server ./cmd/server/main.go
+# Build the application
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -ldflags="-w -s" -o server ./cmd/server/main.go
 
 # Final stage
 FROM alpine:3.19

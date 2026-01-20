@@ -6,6 +6,9 @@ import (
 	"testing"
 )
 
+// Pre-compiled regex for OTP validation (better performance in loop)
+var otpRegex = regexp.MustCompile(`^\d{6}$`)
+
 func TestGenerateOTP(t *testing.T) {
 	// Test that OTP is generated in correct format
 	for i := 0; i < 100; i++ {
@@ -17,7 +20,7 @@ func TestGenerateOTP(t *testing.T) {
 		}
 
 		// Check that it's numeric
-		if matched, _ := regexp.MatchString(`^\d{6}$`, otp); !matched {
+		if !otpRegex.MatchString(otp) {
 			t.Errorf("OTP is not a 6-digit number: %s", otp)
 		}
 

@@ -19,7 +19,7 @@ func main() {
 	ctx, cancel := database.DefaultTimeout()
 	defer cancel()
 
-	fmt.Println("🔍 Verifying Database Structure and Queries...\n")
+	fmt.Println("🔍 Verifying Database Structure and Queries...")
 
 	// 1. Check if sessions table exists
 	fmt.Println("1️⃣ Checking sessions table structure...")

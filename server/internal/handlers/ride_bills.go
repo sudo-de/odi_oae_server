@@ -74,7 +74,7 @@ func GetRideBills(c *fiber.Ctx) error {
 		query += " AND (LOWER(rb.from_location) LIKE LOWER($" + strconv.Itoa(argIndex) + ") OR LOWER(rb.to_location) LIKE LOWER($" + strconv.Itoa(argIndex) + ") OR LOWER(u.username) LIKE LOWER($" + strconv.Itoa(argIndex) + ") OR LOWER(u.name) LIKE LOWER($" + strconv.Itoa(argIndex) + "))"
 		searchPattern := "%" + search + "%"
 		args = append(args, searchPattern, searchPattern, searchPattern, searchPattern)
-		argIndex += 4
+		// argIndex is not used after this point, so no need to increment
 	}
 
 	query += " ORDER BY rb.created_at DESC"
@@ -98,25 +98,25 @@ func GetRideBills(c *fiber.Ctx) error {
 	var bills []fiber.Map
 	for rows.Next() {
 		var (
-			ID          int
-			RideID      int
-			UserID      int
-			FromLoc     string
-			ToLoc       string
-			Fare        float64
-			Status      string
-			Driver      *string
-			Distance    *float64
-			CreatedAt   time.Time
-			UpdatedAt   time.Time
-			RLID        *int
-			RLFrom      *string
-			RLTo        *string
-			RLFare      *float64
-			UID         *int
-			Username    *string
-			Email       *string
-			Name        *string
+			ID        int
+			RideID    int
+			UserID    int
+			FromLoc   string
+			ToLoc     string
+			Fare      float64
+			Status    string
+			Driver    *string
+			Distance  *float64
+			CreatedAt time.Time
+			UpdatedAt time.Time
+			RLID      *int
+			RLFrom    *string
+			RLTo      *string
+			RLFare    *float64
+			UID       *int
+			Username  *string
+			Email     *string
+			Name      *string
 		)
 
 		err := rows.Scan(
@@ -131,7 +131,7 @@ func GetRideBills(c *fiber.Ctx) error {
 		}
 
 		billMap := fiber.Map{
-			"_id":         strconv.Itoa(ID),
+			"_id":          strconv.Itoa(ID),
 			"fromLocation": FromLoc,
 			"toLocation":   ToLoc,
 			"fare":         Fare,
@@ -143,7 +143,7 @@ func GetRideBills(c *fiber.Ctx) error {
 		// Add ride information
 		if RLID != nil {
 			billMap["rideId"] = fiber.Map{
-				"_id":         strconv.Itoa(*RLID),
+				"_id":          strconv.Itoa(*RLID),
 				"fromLocation": *RLFrom,
 				"toLocation":   *RLTo,
 				"fare":         *RLFare,
@@ -230,11 +230,11 @@ func GetRideBillStatistics(c *fiber.Ctx) error {
 	`
 
 	var (
-		TotalBills      int
-		TotalRevenue    float64
-		PendingBills    int
-		PaidBills       int
-		CancelledBills  int
+		TotalBills     int
+		TotalRevenue   float64
+		PendingBills   int
+		PaidBills      int
+		CancelledBills int
 	)
 
 	err = database.GetPool().QueryRow(ctx, query).Scan(
@@ -286,25 +286,25 @@ func GetRideBillByID(c *fiber.Ctx) error {
 	`
 
 	var (
-		ID          int
-		RideID      int
-		UserID      int
-		FromLoc     string
-		ToLoc       string
-		Fare        float64
-		Status      string
-		Driver      *string
-		Distance    *float64
-		CreatedAt   time.Time
-		UpdatedAt   time.Time
-		RLID        *int
-		RLFrom      *string
-		RLTo        *string
-		RLFare      *float64
-		UID         *int
-		Username    *string
-		Email       *string
-		Name        *string
+		ID        int
+		RideID    int
+		UserID    int
+		FromLoc   string
+		ToLoc     string
+		Fare      float64
+		Status    string
+		Driver    *string
+		Distance  *float64
+		CreatedAt time.Time
+		UpdatedAt time.Time
+		RLID      *int
+		RLFrom    *string
+		RLTo      *string
+		RLFare    *float64
+		UID       *int
+		Username  *string
+		Email     *string
+		Name      *string
 	)
 
 	err := database.GetPool().QueryRow(ctx, query, id).Scan(
@@ -327,7 +327,7 @@ func GetRideBillByID(c *fiber.Ctx) error {
 	}
 
 	billMap := fiber.Map{
-		"_id":         strconv.Itoa(ID),
+		"_id":          strconv.Itoa(ID),
 		"fromLocation": FromLoc,
 		"toLocation":   ToLoc,
 		"fare":         Fare,
@@ -338,7 +338,7 @@ func GetRideBillByID(c *fiber.Ctx) error {
 
 	if RLID != nil {
 		billMap["rideId"] = fiber.Map{
-			"_id":         strconv.Itoa(*RLID),
+			"_id":          strconv.Itoa(*RLID),
 			"fromLocation": *RLFrom,
 			"toLocation":   *RLTo,
 			"fare":         *RLFare,
@@ -497,9 +497,9 @@ func UpdateRideBill(c *fiber.Ctx) error {
 	}
 
 	billMap := fiber.Map{
-		"_id":         strconv.Itoa(ID),
-		"rideId":      strconv.Itoa(RideID),
-		"userId":      strconv.Itoa(UserID),
+		"_id":          strconv.Itoa(ID),
+		"rideId":       strconv.Itoa(RideID),
+		"userId":       strconv.Itoa(UserID),
 		"fromLocation": FromLoc,
 		"toLocation":   ToLoc,
 		"fare":         Fare,
