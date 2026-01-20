@@ -1,0 +1,41 @@
+# Environment variables (NEVER commit)
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+
+# Build outputs
+server
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test outputs
+coverage.out
+coverage.html
+*.test
+*.out
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+
+# Docker
+docker-compose.override.yml
