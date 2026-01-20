@@ -5,8 +5,9 @@
 .env.production
 .env.staging
 
-# Build outputs
-server
+# Build outputs (binary only, not cmd/server directory)
+/server
+server-*
 *.exe
 *.dll
 *.so
