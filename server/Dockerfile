@@ -24,7 +24,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -ldflags="-w -s" -o server ./cmd/server/main.go
 
 # Final stage
-FROM alpine:3.19
+FROM alpine:3.23
 
 # Install ca-certificates for HTTPS requests and tzdata for timezone
 RUN apk --no-cache add ca-certificates tzdata
