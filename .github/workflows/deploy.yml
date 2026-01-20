@@ -1,0 +1,70 @@
+name: Deploy to Production
+
+on:
+  workflow_run:
+    workflows: ["Build & Push Docker Image"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Docker image tag to deploy'
+        required: false
+        default: 'latest'
+
+jobs:
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+    environment: production
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+
+    steps:
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # Pull latest image
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/odi-server:${{ github.event.inputs.image_tag || 'latest' }}
+            
+            # Stop existing container
+            docker stop odi-server || true
+            docker rm odi-server || true
+            
+            # Run new container with environment variables
+            docker run -d \
+              --name odi-server \
+              --restart unless-stopped \
+              -p 3000:3000 \
+              -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
+              -e REDIS_URL="${{ secrets.REDIS_URL }}" \
+              -e AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}" \
+              -e AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
+              -e AWS_REGION="${{ secrets.AWS_REGION }}" \
+              -e S3_BUCKET_NAME="${{ secrets.S3_BUCKET_NAME }}" \
+              -e SMTP_HOST="${{ secrets.SMTP_HOST }}" \
+              -e SMTP_PORT="${{ secrets.SMTP_PORT }}" \
+              -e SMTP_USERNAME="${{ secrets.SMTP_USERNAME }}" \
+              -e SMTP_PASSWORD="${{ secrets.SMTP_PASSWORD }}" \
+              -e SMTP_FROM_EMAIL="${{ secrets.SMTP_FROM_EMAIL }}" \
+              -e SMTP_FROM_NAME="${{ secrets.SMTP_FROM_NAME }}" \
+              -e APP_ENV=production \
+              ${{ secrets.DOCKERHUB_USERNAME }}/odi-server:${{ github.event.inputs.image_tag || 'latest' }}
+            
+            # Cleanup old images
+            docker image prune -f
+            
+            # Health check (checking container locally on EC2)
+            sleep 10
+            curl -f http://127.0.0.1:3000/health || exit 1
+
+      - name: Notify on success
+        if: success()
+        run: echo "✅ Deployment successful!"
+
+      - name: Notify on failure
+        if: failure()
+        run: echo "Deployment failed!"

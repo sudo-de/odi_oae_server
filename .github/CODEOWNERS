@@ -1,0 +1,8 @@
+# Default code owners for all files
+* @sudo-de
+
+# Server (Backend)
+/server/ @sudo-de
+
+# Infrastructure & CI/CD
+/.github/ @sudo-de
