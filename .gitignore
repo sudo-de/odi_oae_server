@@ -1,0 +1,21 @@
+# Frontend and Mobile - keep local only
+client/
+mobile/
+
+# Infrastructure (if not needed in repo)
+# infra/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment files
+.env
+.env.*
+!.env.example
