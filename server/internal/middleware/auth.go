@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"log"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -14,6 +15,11 @@ func RequireAuth() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		// Get session ID from cookie
 		sessionID := c.Cookies("session_id")
+		
+		// Debug: log cookie info
+		log.Printf("[Auth] Path: %s, Cookie session_id: %q, All cookies: %s", 
+			c.Path(), sessionID, c.Get("Cookie"))
+		
 		if sessionID == "" {
 			return c.Status(401).JSON(fiber.Map{
 				"error": "unauthorized",
