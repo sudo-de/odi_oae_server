@@ -40,11 +40,19 @@ func main() {
 	app.Use(logger.New(logger.Config{
 		Format: "[${time}] ${status} - ${method} ${path} (${latency})\n",
 	}))
+	// CORS configuration
+	allowedOrigins := os.Getenv("CORS_ORIGINS")
+	allowCredentials := true
+	if allowedOrigins == "" || allowedOrigins == "*" {
+		// In production without explicit origins, disable credentials for security
+		allowedOrigins = "*"
+		allowCredentials = false
+	}
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     "*",
+		AllowOrigins:     allowedOrigins,
 		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS,PATCH",
 		AllowHeaders:     "Origin,Content-Type,Accept,Authorization,X-Request-ID",
-		AllowCredentials: true,
+		AllowCredentials: allowCredentials,
 	}))
 	app.Use(middleware.RequestID())
 
