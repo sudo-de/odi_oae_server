@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -83,13 +84,21 @@ func Login(c *fiber.Ctx) error {
 	}
 
 	// Set session cookie
+	// For cross-origin requests, SameSite must be "None" and Secure should be true
+	// But Secure=true requires HTTPS, so we check the environment
+	sameSite := "Lax"
+	secure := false
+	if os.Getenv("COOKIE_SAMESITE") == "None" {
+		sameSite = "None"
+		secure = os.Getenv("COOKIE_SECURE") == "true"
+	}
 	c.Cookie(&fiber.Cookie{
 		Name:     "session_id",
 		Value:    sessionID,
 		Expires:  expiresAt,
 		HTTPOnly: true,
-		Secure:   false, // Set to true in production with HTTPS
-		SameSite: "Lax",
+		Secure:   secure,
+		SameSite: sameSite,
 		Path:     "/",
 	})
 
@@ -114,12 +123,20 @@ func Logout(c *fiber.Ctx) error {
 		_ = auth.Logout(ctx, sessionID)
 	}
 
-	// Clear cookie
+	// Clear cookie with same SameSite settings
+	sameSite := "Lax"
+	secure := false
+	if os.Getenv("COOKIE_SAMESITE") == "None" {
+		sameSite = "None"
+		secure = os.Getenv("COOKIE_SECURE") == "true"
+	}
 	c.Cookie(&fiber.Cookie{
 		Name:     "session_id",
 		Value:    "",
 		Expires:  time.Now().Add(-time.Hour),
 		HTTPOnly: true,
+		Secure:   secure,
+		SameSite: sameSite,
 		Path:     "/",
 	})
 
