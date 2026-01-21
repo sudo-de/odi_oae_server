@@ -378,14 +378,25 @@ func CreateUser(c *fiber.Ctx) error {
 
 	if err != nil {
 		log.Printf("[CreateUser] Insert error: %v", err)
+		errMsg := err.Error()
 		// Check for unique constraint violations
-		if err.Error() == "duplicate key value violates unique constraint" {
+		if strings.Contains(errMsg, "duplicate key") || strings.Contains(errMsg, "unique constraint") {
+			if strings.Contains(errMsg, "username") {
+				return c.Status(409).JSON(fiber.Map{
+					"error": "Username already exists. Please choose a different username.",
+				})
+			}
+			if strings.Contains(errMsg, "email") {
+				return c.Status(409).JSON(fiber.Map{
+					"error": "Email already exists. Please use a different email address.",
+				})
+			}
 			return c.Status(409).JSON(fiber.Map{
-				"error": "username or email already exists",
+				"error": "Username or email already exists.",
 			})
 		}
 		return c.Status(500).JSON(fiber.Map{
-			"error": "failed to create user",
+			"error": "Failed to create user. Please try again.",
 		})
 	}
 
@@ -527,24 +538,31 @@ func UpdateUser(c *fiber.Ctx) error {
 			targetRole := strings.ToLower(targetUserRole)
 			newRole := strings.ToLower(strings.TrimSpace(*req.Role))
 
-			// Prevent anyone from changing role of SuperAdmin users
-			if targetRole == "superadmin" {
-				return c.Status(403).JSON(fiber.Map{
-					"error": "cannot change the role of SuperAdmin users",
-				})
-			}
+			// Only apply restrictions if the role is actually changing
+			if newRole != targetRole {
+				// Prevent anyone from changing role of SuperAdmin users
+				if targetRole == "superadmin" {
+					return c.Status(403).JSON(fiber.Map{
+						"error": "cannot change the role of SuperAdmin users",
+					})
+				}
 
-			// Prevent non-SuperAdmin users from promoting anyone to SuperAdmin
-			if newRole == "superadmin" && currentUserRole != "superadmin" {
-				return c.Status(403).JSON(fiber.Map{
-					"error": "only SuperAdmin can promote users to SuperAdmin role",
-				})
+				// Prevent non-SuperAdmin users from promoting anyone to SuperAdmin
+				if newRole == "superadmin" && currentUserRole != "superadmin" {
+					return c.Status(403).JSON(fiber.Map{
+						"error": "only SuperAdmin can promote users to SuperAdmin role",
+					})
+				}
+
+				updates = append(updates, "role = $"+strconv.Itoa(argPos))
+				args = append(args, *req.Role)
+				argPos++
 			}
+		} else {
+			updates = append(updates, "role = $"+strconv.Itoa(argPos))
+			args = append(args, *req.Role)
+			argPos++
 		}
-
-		updates = append(updates, "role = $"+strconv.Itoa(argPos))
-		args = append(args, *req.Role)
-		argPos++
 	}
 	// Handle status field (prioritize Status over IsActive for backward compatibility)
 	if req.Status != nil {
@@ -562,21 +580,28 @@ func UpdateUser(c *fiber.Ctx) error {
 			})
 		}
 
-		// Prevent anyone from changing status of SuperAdmin users
-		if session != nil {
-			targetRole := strings.ToLower(targetUserRole)
+		// Get current status to check if it's actually changing
+		var currentStatus string
+		database.GetPool().QueryRow(ctx, "SELECT COALESCE(status, 'active') FROM users WHERE id = $1", id).Scan(&currentStatus)
 
-			// Nobody can change status of SuperAdmin users
-			if targetRole == "superadmin" {
-				return c.Status(403).JSON(fiber.Map{
-					"error": "cannot change the status of SuperAdmin users",
-				})
+		// Only apply restrictions if the status is actually changing
+		if statusValue != strings.ToLower(currentStatus) {
+			// Prevent anyone from changing status of SuperAdmin users
+			if session != nil {
+				targetRole := strings.ToLower(targetUserRole)
+
+				// Nobody can change status of SuperAdmin users
+				if targetRole == "superadmin" {
+					return c.Status(403).JSON(fiber.Map{
+						"error": "cannot change the status of SuperAdmin users",
+					})
+				}
 			}
-		}
 
-		updates = append(updates, "status = $"+strconv.Itoa(argPos))
-		args = append(args, statusValue)
-		argPos++
+			updates = append(updates, "status = $"+strconv.Itoa(argPos))
+			args = append(args, statusValue)
+			argPos++
+		}
 	} else if req.IsActive != nil {
 		// Backward compatibility: convert IsActive to status
 		status := "active"

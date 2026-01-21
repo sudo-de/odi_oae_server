@@ -103,10 +103,13 @@ func Login(c *fiber.Ctx) error {
 	})
 
 	requestID := middleware.GetRequestID(c)
-	return c.JSON(LoginResponse{
-		Message:   "Login successful",
-		Session:   session,
-		RequestID: requestID,
+
+	// Return session_id as access_token for mobile apps
+	return c.JSON(fiber.Map{
+		"message":      "Login successful",
+		"session":      session,
+		"access_token": sessionID, // For mobile apps using Bearer auth
+		"request_id":   requestID,
 	})
 }
 
@@ -503,14 +506,14 @@ func GetSessions(c *fiber.Ctx) error {
 		}
 
 		sessions = append(sessions, fiber.Map{
-			"id":         s.SessionID,
-			"device":     deviceInfo,
-			"location":   location,
-			"ip":         ipAddress,
-			"lastActive": s.LastActive.Format(time.RFC3339),
-			"createdAt":  s.CreatedAt.Format(time.RFC3339),
+			"id":          s.SessionID,
+			"device":      deviceInfo,
+			"location":    location,
+			"ip":          ipAddress,
+			"lastActive":  s.LastActive.Format(time.RFC3339),
+			"createdAt":   s.CreatedAt.Format(time.RFC3339),
 			"loggedOutAt": loggedOutAt,
-			"isCurrent":  s.IsCurrent,
+			"isCurrent":   s.IsCurrent,
 		})
 	}
 
@@ -575,7 +578,7 @@ func GetLoginHistory(c *fiber.Ctx) error {
 
 		// Check if session is expired
 		isExpired := time.Now().After(s.ExpiresAt)
-		
+
 		loggedOutAt := ""
 		if s.LoggedOutAt != nil {
 			loggedOutAt = s.LoggedOutAt.Format(time.RFC3339)
@@ -585,18 +588,18 @@ func GetLoginHistory(c *fiber.Ctx) error {
 		}
 
 		history = append(history, fiber.Map{
-			"id":         s.SessionID,
-			"device":     deviceInfo,
-			"location":   location,
-			"ip":         ipAddress,
-			"lastActive": s.LastActive.Format(time.RFC3339),
-			"createdAt":  s.CreatedAt.Format(time.RFC3339),
-			"expiresAt":  s.ExpiresAt.Format(time.RFC3339),
+			"id":          s.SessionID,
+			"device":      deviceInfo,
+			"location":    location,
+			"ip":          ipAddress,
+			"lastActive":  s.LastActive.Format(time.RFC3339),
+			"createdAt":   s.CreatedAt.Format(time.RFC3339),
+			"expiresAt":   s.ExpiresAt.Format(time.RFC3339),
 			"loggedOutAt": loggedOutAt,
-			"isCurrent":  s.IsCurrent,
-			"isExpired":  isExpired,
-			"username":   session.Username,
-			"email":      session.Email,
+			"isCurrent":   s.IsCurrent,
+			"isExpired":   isExpired,
+			"username":    session.Username,
+			"email":       session.Email,
 		})
 	}
 

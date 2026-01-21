@@ -118,6 +118,12 @@ func setupRoutes(app *fiber.App) {
 	protected.Delete("/sessions/:id", handlers.RevokeSession)
 	protected.Delete("/sessions", handlers.RevokeAllSessions)
 
+	// Student accessible routes (read-only for ride locations and own ride bills)
+	protected.Get("/ride-locations", handlers.GetRideLocations)
+	protected.Get("/ride-locations/:id", handlers.GetRideLocationByID)
+	protected.Get("/my-ride-bills", handlers.GetMyRideBills)
+	protected.Post("/ride-bills", handlers.CreateRideBill) // Students can book rides
+
 	// Admin routes
 	admin := api.Group("", middleware.RequireRole("Admin", "SuperAdmin"))
 

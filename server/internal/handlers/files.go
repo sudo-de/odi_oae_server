@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"mime/multipart"
 	"os"
 	"path/filepath"
@@ -163,9 +164,9 @@ func uploadToS3(c *fiber.Ctx, fileHeader *multipart.FileHeader, category, filena
 		return "", fmt.Errorf("failed to upload to S3: %w", err)
 	}
 
-	// Return S3 URL
-	s3URL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", bucketName, region, s3Key)
-	return s3URL, nil
+	// Return API path (not S3 URL) so client uses the authenticated proxy endpoint
+	apiPath := fmt.Sprintf("/api/files/%s/%s", category, filename)
+	return apiPath, nil
 }
 
 // uploadToLocal uploads file to local storage
@@ -236,21 +237,96 @@ func GetFile(c *fiber.Ctx) error {
 
 	// File not found locally, check if we should try S3
 	storageType := config.StorageType()
+	log.Printf("[GetFile] File not found locally, storageType=%s, category=%s, filename=%s", storageType, category, filename)
 	if storageType == "s3" {
-		// Generate presigned URL for S3 file (since bucket is private)
-		presignedURL, err := getS3PresignedURL(category, filename)
-		if err != nil {
-			return c.Status(500).JSON(fiber.Map{
-				"error": "failed to generate file URL",
-			})
-		}
-		return c.Redirect(presignedURL, 302)
+		// Stream file directly from S3 (don't redirect - img tags don't follow redirects with cookies)
+		return streamFromS3(c, category, filename)
 	}
 
 	// File not found in local storage and S3 not configured
 	return c.Status(404).JSON(fiber.Map{
 		"error": "file not found",
 	})
+}
+
+// streamFromS3 fetches file from S3 and streams it to the client
+func streamFromS3(c *fiber.Ctx, category, filename string) error {
+	ctx := context.Background()
+
+	accessKeyID := config.AWSAccessKeyID()
+	secretKey := config.AWSSecretKey()
+	bucketName := config.S3BucketName()
+	region := config.AWSRegion()
+
+	if accessKeyID == "" || secretKey == "" || bucketName == "" {
+		return c.Status(500).JSON(fiber.Map{
+			"error": "AWS credentials not configured",
+		})
+	}
+
+	awsCfg, err := awsconfig.LoadDefaultConfig(ctx,
+		awsconfig.WithRegion(region),
+		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+			accessKeyID,
+			secretKey,
+			"",
+		)),
+	)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"error": "failed to load AWS config",
+		})
+	}
+
+	s3Client := s3.NewFromConfig(awsCfg)
+	s3Key := fmt.Sprintf("%s/%s", category, filename)
+
+	log.Printf("[S3] Fetching file: bucket=%s, key=%s", bucketName, s3Key)
+
+	result, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(s3Key),
+	})
+	if err != nil {
+		log.Printf("[S3] Error fetching file: %v", err)
+		return c.Status(404).JSON(fiber.Map{
+			"error": "file not found",
+		})
+	}
+	defer result.Body.Close()
+
+	// Set content type
+	if result.ContentType != nil {
+		c.Set("Content-Type", *result.ContentType)
+	} else {
+		// Guess content type from extension
+		ext := strings.ToLower(filepath.Ext(filename))
+		switch ext {
+		case ".jpg", ".jpeg":
+			c.Set("Content-Type", "image/jpeg")
+		case ".png":
+			c.Set("Content-Type", "image/png")
+		case ".pdf":
+			c.Set("Content-Type", "application/pdf")
+		case ".heif", ".heic":
+			c.Set("Content-Type", "image/heif")
+		default:
+			c.Set("Content-Type", "application/octet-stream")
+		}
+	}
+
+	// Set cache control for better performance
+	c.Set("Cache-Control", "private, max-age=3600")
+
+	// Stream the file content
+	body, err := io.ReadAll(result.Body)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"error": "failed to read file",
+		})
+	}
+
+	return c.Send(body)
 }
 
 // getS3PresignedURL generates a presigned URL for accessing a private S3 object

@@ -193,6 +193,193 @@ func GetRideBills(c *fiber.Ctx) error {
 	return c.JSON(bills)
 }
 
+// GetMyRideBills returns ride bills for the current authenticated user
+func GetMyRideBills(c *fiber.Ctx) error {
+	ctx, cancel := database.DefaultTimeout()
+	defer cancel()
+
+	// Get current user ID from session
+	userID := c.Locals("userID")
+	if userID == nil {
+		return c.Status(401).JSON(fiber.Map{
+			"error": "unauthorized",
+		})
+	}
+
+	status := c.Query("status", "")
+
+	query := `
+		SELECT 
+			rb.id, rb.ride_id, rb.user_id, rb.from_location, rb.to_location,
+			rb.fare, rb.status, rb.driver, rb.distance, rb.created_at, rb.updated_at,
+			rl.id as rl_id, rl.from_location as rl_from, rl.to_location as rl_to, rl.fare as rl_fare
+		FROM ride_bills rb
+		LEFT JOIN ride_locations rl ON rb.ride_id = rl.id
+		WHERE rb.user_id = $1
+	`
+	var args []interface{}
+	args = append(args, userID)
+	argIndex := 2
+
+	if status != "" && status != "all" {
+		query += " AND rb.status = $" + strconv.Itoa(argIndex)
+		args = append(args, status)
+	}
+
+	query += " ORDER BY rb.created_at DESC"
+
+	rows, err := database.GetPool().Query(ctx, query, args...)
+	if err != nil {
+		log.Printf("[GetMyRideBills] Query error: %v", err)
+		return c.Status(500).JSON(fiber.Map{
+			"error": "failed to fetch ride bills",
+		})
+	}
+	defer rows.Close()
+
+	var bills []fiber.Map
+	for rows.Next() {
+		var (
+			ID        int
+			RideID    int
+			UserID    int
+			FromLoc   string
+			ToLoc     string
+			Fare      float64
+			Status    string
+			Driver    *string
+			Distance  *float64
+			CreatedAt time.Time
+			UpdatedAt time.Time
+			RLID      *int
+			RLFrom    *string
+			RLTo      *string
+			RLFare    *float64
+		)
+
+		err := rows.Scan(
+			&ID, &RideID, &UserID, &FromLoc, &ToLoc, &Fare, &Status, &Driver, &Distance,
+			&CreatedAt, &UpdatedAt,
+			&RLID, &RLFrom, &RLTo, &RLFare,
+		)
+		if err != nil {
+			log.Printf("[GetMyRideBills] Scan error: %v", err)
+			continue
+		}
+
+		billMap := fiber.Map{
+			"_id":          strconv.Itoa(ID),
+			"fromLocation": FromLoc,
+			"toLocation":   ToLoc,
+			"fare":         Fare,
+			"status":       Status,
+			"createdAt":    CreatedAt.Format(time.RFC3339),
+			"updatedAt":    UpdatedAt.Format(time.RFC3339),
+		}
+
+		if RLID != nil {
+			billMap["rideId"] = fiber.Map{
+				"_id":          strconv.Itoa(*RLID),
+				"fromLocation": *RLFrom,
+				"toLocation":   *RLTo,
+				"fare":         *RLFare,
+			}
+		} else {
+			billMap["rideId"] = strconv.Itoa(RideID)
+		}
+
+		if Driver != nil {
+			billMap["driver"] = *Driver
+		}
+		if Distance != nil {
+			billMap["distance"] = *Distance
+		}
+
+		bills = append(bills, billMap)
+	}
+
+	return c.JSON(bills)
+}
+
+// CreateRideBill creates a new ride bill for the current user
+func CreateRideBill(c *fiber.Ctx) error {
+	ctx, cancel := database.DefaultTimeout()
+	defer cancel()
+
+	// Get current user ID from session
+	userID := c.Locals("userID")
+	if userID == nil {
+		return c.Status(401).JSON(fiber.Map{
+			"error": "unauthorized",
+		})
+	}
+
+	var req struct {
+		RideID       int      `json:"rideId"`
+		FromLocation string   `json:"fromLocation"`
+		ToLocation   string   `json:"toLocation"`
+		Fare         float64  `json:"fare"`
+		Driver       *string  `json:"driver"`
+		Distance     *float64 `json:"distance"`
+	}
+
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(fiber.Map{
+			"error": "invalid request body",
+		})
+	}
+
+	if req.FromLocation == "" || req.ToLocation == "" {
+		return c.Status(400).JSON(fiber.Map{
+			"error": "fromLocation and toLocation are required",
+		})
+	}
+
+	// If rideId is provided, fetch fare from ride_locations
+	if req.RideID > 0 && req.Fare == 0 {
+		var rideFare float64
+		err := database.GetPool().QueryRow(ctx,
+			"SELECT fare FROM ride_locations WHERE id = $1", req.RideID).Scan(&rideFare)
+		if err == nil {
+			req.Fare = rideFare
+		}
+	}
+
+	// Insert ride bill
+	query := `
+		INSERT INTO ride_bills (ride_id, user_id, from_location, to_location, fare, status, driver, distance, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, 'pending', $6, $7, NOW(), NOW())
+		RETURNING id, created_at, updated_at
+	`
+
+	var id int
+	var createdAt, updatedAt time.Time
+	err := database.GetPool().QueryRow(ctx, query,
+		req.RideID, userID, req.FromLocation, req.ToLocation, req.Fare, req.Driver, req.Distance,
+	).Scan(&id, &createdAt, &updatedAt)
+
+	if err != nil {
+		log.Printf("[CreateRideBill] Insert error: %v", err)
+		return c.Status(500).JSON(fiber.Map{
+			"error": "failed to create ride bill",
+		})
+	}
+
+	return c.Status(201).JSON(fiber.Map{
+		"_id":          strconv.Itoa(id),
+		"rideId":       req.RideID,
+		"userId":       userID,
+		"fromLocation": req.FromLocation,
+		"toLocation":   req.ToLocation,
+		"fare":         req.Fare,
+		"status":       "pending",
+		"driver":       req.Driver,
+		"distance":     req.Distance,
+		"createdAt":    createdAt.Format(time.RFC3339),
+		"updatedAt":    updatedAt.Format(time.RFC3339),
+	})
+}
+
 // GetRideBillStatistics returns statistics about ride bills
 func GetRideBillStatistics(c *fiber.Ctx) error {
 	ctx, cancel := database.DefaultTimeout()

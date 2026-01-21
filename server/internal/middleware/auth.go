@@ -10,15 +10,32 @@ import (
 	"github.com/server/internal/database"
 )
 
+// getSessionID extracts session ID from cookie or Authorization header
+func getSessionID(c *fiber.Ctx) string {
+	// First, try cookie
+	sessionID := c.Cookies("session_id")
+	if sessionID != "" {
+		return sessionID
+	}
+
+	// Then, try Authorization header (Bearer token) for mobile apps
+	authHeader := c.Get("Authorization")
+	if strings.HasPrefix(authHeader, "Bearer ") {
+		return strings.TrimPrefix(authHeader, "Bearer ")
+	}
+
+	return ""
+}
+
 // RequireAuth middleware checks if the user is authenticated
 func RequireAuth() fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		// Get session ID from cookie
-		sessionID := c.Cookies("session_id")
+		// Get session ID from cookie or Authorization header
+		sessionID := getSessionID(c)
 
-		// Debug: log cookie info
-		log.Printf("[Auth] Path: %s, Cookie session_id: %q, All cookies: %s",
-			c.Path(), sessionID, c.Get("Cookie"))
+		// Debug: log auth info
+		log.Printf("[Auth] Path: %s, SessionID: %q (from cookie or bearer)",
+			c.Path(), sessionID)
 
 		if sessionID == "" {
 			return c.Status(401).JSON(fiber.Map{
@@ -57,10 +74,10 @@ func RequireAuth() fiber.Handler {
 // It also performs authentication check inline (not by calling RequireAuth)
 func RequireRole(roles ...string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		// Get session ID from cookie (inline auth check)
-		sessionID := c.Cookies("session_id")
+		// Get session ID from cookie or Authorization header
+		sessionID := getSessionID(c)
 
-		log.Printf("[Auth] RequireRole - Path: %s, Cookie session_id: %q", c.Path(), sessionID)
+		log.Printf("[Auth] RequireRole - Path: %s, SessionID: %q", c.Path(), sessionID)
 
 		if sessionID == "" {
 			return c.Status(401).JSON(fiber.Map{
