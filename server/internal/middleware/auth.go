@@ -59,9 +59,9 @@ func RequireRole(roles ...string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		// Get session ID from cookie (inline auth check)
 		sessionID := c.Cookies("session_id")
-		
+
 		log.Printf("[Auth] RequireRole - Path: %s, Cookie session_id: %q", c.Path(), sessionID)
-		
+
 		if sessionID == "" {
 			return c.Status(401).JSON(fiber.Map{
 				"error": "unauthorized",

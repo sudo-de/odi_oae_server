@@ -160,8 +160,8 @@ func setupRoutes(app *fiber.App) {
 
 	// File uploads (admin only)
 	admin.Post("/upload", handlers.UploadFile)
-	admin.Get("/files/:filename", handlers.GetFile)
-	admin.Delete("/files/:filename", handlers.DeleteFile)
+	admin.Get("/files/:category/:filename", handlers.GetFile)
+	admin.Delete("/files/:category/:filename", handlers.DeleteFile)
 
 	// Static file serving for uploads
 	app.Static("/uploads", "./uploads")

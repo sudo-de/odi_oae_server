@@ -305,18 +305,80 @@ func getS3PresignedURL(category, filename string) (string, error) {
 
 // DeleteFile deletes an uploaded file
 func DeleteFile(c *fiber.Ctx) error {
-	id := c.Params("id")
-	if id == "" {
+	category := c.Params("category")
+	filename := c.Params("filename")
+
+	if category == "" || filename == "" {
 		return c.Status(400).JSON(fiber.Map{
-			"error": "file id is required",
+			"error": "category and filename are required",
 		})
 	}
 
-	// For now, just return success (file deletion can be implemented later)
-	// In a real system, you'd look up the file path from database and delete it
-	requestID := middleware.GetRequestID(c)
-	return c.JSON(fiber.Map{
-		"message":    "file deleted successfully",
-		"request_id": requestID,
+	// Security: prevent directory traversal
+	if strings.Contains(filename, "..") || strings.Contains(filename, "/") {
+		return c.Status(400).JSON(fiber.Map{
+			"error": "invalid filename",
+		})
+	}
+
+	// Try to delete from local storage
+	filePath := filepath.Join("./uploads", category, filename)
+	if err := os.Remove(filePath); err == nil {
+		requestID := middleware.GetRequestID(c)
+		return c.JSON(fiber.Map{
+			"message":    "file deleted successfully",
+			"request_id": requestID,
+		})
+	}
+
+	// Try to delete from S3
+	storageType := config.StorageType()
+	if storageType == "s3" {
+		if err := deleteFromS3(category, filename); err == nil {
+			requestID := middleware.GetRequestID(c)
+			return c.JSON(fiber.Map{
+				"message":    "file deleted successfully",
+				"request_id": requestID,
+			})
+		}
+	}
+
+	return c.Status(404).JSON(fiber.Map{
+		"error": "file not found",
 	})
+}
+
+// deleteFromS3 deletes a file from S3
+func deleteFromS3(category, filename string) error {
+	ctx := context.Background()
+
+	accessKeyID := config.AWSAccessKeyID()
+	secretKey := config.AWSSecretKey()
+	bucketName := config.S3BucketName()
+	region := config.AWSRegion()
+
+	if accessKeyID == "" || secretKey == "" || bucketName == "" {
+		return fmt.Errorf("AWS credentials not configured")
+	}
+
+	awsCfg, err := awsconfig.LoadDefaultConfig(ctx,
+		awsconfig.WithRegion(region),
+		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+			accessKeyID,
+			secretKey,
+			"",
+		)),
+	)
+	if err != nil {
+		return err
+	}
+
+	s3Client := s3.NewFromConfig(awsCfg)
+	s3Key := fmt.Sprintf("%s/%s", category, filename)
+
+	_, err = s3Client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(s3Key),
+	})
+	return err
 }
